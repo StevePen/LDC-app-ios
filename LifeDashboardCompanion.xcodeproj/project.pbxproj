@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6834543E155CE8FC8B45ED25 /* MqttPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF73E5D5E207F8C511EF06F5 /* MqttPacket.swift */; };
+		71995D4DCF9914D64779CC97 /* MqttSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7F64070EB24778B41A051B /* MqttSupportTests.swift */; };
+		A6EF25DF6E9049216FEDF0BC /* MqttPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAE9DB642137B4DAEE89D40 /* MqttPublisher.swift */; };
 		B1000001 /* LifeDashboardCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001 /* LifeDashboardCompanionApp.swift */; };
 		B1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000002 /* ContentView.swift */; };
 		B1000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1000003 /* Assets.xcassets */; };
@@ -18,17 +21,12 @@
 		B100000A /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000A /* HealthKitManager.swift */; };
 		B100000B /* HealthSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000B /* HealthSyncManager.swift */; };
 		B100000E /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000E /* BackgroundSyncManager.swift */; };
-		B1000015 /* PendingSyncStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000015 /* PendingSyncStore.swift */; };
-		B1000016 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000016 /* NetworkMonitor.swift */; };
 		B100000F /* ExportManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000F /* ExportManager.swift */; };
 		B1000010 /* HealthKitScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000010 /* HealthKitScreen.swift */; };
 		B1000012 /* LogsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000012 /* LogsScreen.swift */; };
+		B1000015 /* PendingSyncStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000015 /* PendingSyncStore.swift */; };
+		B1000016 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000016 /* NetworkMonitor.swift */; };
 		B1000017 /* WebhookSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000017 /* WebhookSigner.swift */; };
-		6834543E155CE8FC8B45ED25 /* MqttPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF73E5D5E207F8C511EF06F5 /* MqttPacket.swift */; };
-		CF775D282F2EDF1259F96E3B /* MqttSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBDAA116A38516E98827EFA /* MqttSupport.swift */; };
-		A6EF25DF6E9049216FEDF0BC /* MqttPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAE9DB642137B4DAEE89D40 /* MqttPublisher.swift */; };
-		DC3F56B7B12AAB0A0F646E19 /* MqttPacketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7844ED7AB1F0D76FD282CC18 /* MqttPacketTests.swift */; };
-		71995D4DCF9914D64779CC97 /* MqttSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7F64070EB24778B41A051B /* MqttSupportTests.swift */; };
 		B1000018 /* WebhookRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000018 /* WebhookRetryPolicy.swift */; };
 		B1000019 /* SleepSessionBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000019 /* SleepSessionBuilder.swift */; };
 		B100001A /* WebhookSignerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100001A /* WebhookSignerTests.swift */; };
@@ -39,7 +37,6 @@
 		B100001F /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100001F /* KeychainStore.swift */; };
 		B1000022 /* LogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000022 /* LogStore.swift */; };
 		B1000023 /* AboutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000023 /* AboutScreen.swift */; };
-		B1000040 /* DashboardCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000040 /* DashboardCard.swift */; };
 		B1000024 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F1000024 /* PrivacyInfo.xcprivacy */; };
 		B1000025 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F1000025 /* Localizable.xcstrings */; };
 		B1000026 /* SyncLimitsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000026 /* SyncLimitsTests.swift */; };
@@ -50,6 +47,9 @@
 		B100002B /* SharedSyncStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100002C /* SharedSyncStatus.swift */; };
 		B100002C /* SyncHealthDataIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100002D /* SyncHealthDataIntent.swift */; };
 		B100002D /* SyncFailureNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100002E /* SyncFailureNotifier.swift */; };
+		B1000040 /* DashboardCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000040 /* DashboardCard.swift */; };
+		CF775D282F2EDF1259F96E3B /* MqttSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBDAA116A38516E98827EFA /* MqttSupport.swift */; };
+		DC3F56B7B12AAB0A0F646E19 /* MqttPacketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7844ED7AB1F0D76FD282CC18 /* MqttPacketTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +84,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		4B7F64070EB24778B41A051B /* MqttSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttSupportTests.swift; sourceTree = "<group>"; };
+		5EAE9DB642137B4DAEE89D40 /* MqttPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPublisher.swift; sourceTree = "<group>"; };
+		7844ED7AB1F0D76FD282CC18 /* MqttPacketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPacketTests.swift; sourceTree = "<group>"; };
+		7FBDAA116A38516E98827EFA /* MqttSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttSupport.swift; sourceTree = "<group>"; };
+		EF73E5D5E207F8C511EF06F5 /* MqttPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPacket.swift; sourceTree = "<group>"; };
 		F1000001 /* LifeDashboardCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeDashboardCompanionApp.swift; sourceTree = "<group>"; };
 		F1000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		F1000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -95,32 +100,26 @@
 		F100000A /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		F100000B /* HealthSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncManager.swift; sourceTree = "<group>"; };
 		F100000E /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
-		F1000015 /* PendingSyncStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingSyncStore.swift; sourceTree = "<group>"; };
-		F1000016 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		F100000F /* ExportManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportManager.swift; sourceTree = "<group>"; };
 		F1000010 /* HealthKitScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitScreen.swift; sourceTree = "<group>"; };
 		F1000012 /* LogsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsScreen.swift; sourceTree = "<group>"; };
 		F1000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F1000014 /* LifeDashboardCompanion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LifeDashboardCompanion.entitlements; sourceTree = "<group>"; };
+		F1000015 /* PendingSyncStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingSyncStore.swift; sourceTree = "<group>"; };
+		F1000016 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		F1000017 /* WebhookSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookSigner.swift; sourceTree = "<group>"; };
-		EF73E5D5E207F8C511EF06F5 /* MqttPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPacket.swift; sourceTree = "<group>"; };
-		7FBDAA116A38516E98827EFA /* MqttSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttSupport.swift; sourceTree = "<group>"; };
-		5EAE9DB642137B4DAEE89D40 /* MqttPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPublisher.swift; sourceTree = "<group>"; };
-		7844ED7AB1F0D76FD282CC18 /* MqttPacketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttPacketTests.swift; sourceTree = "<group>"; };
-		4B7F64070EB24778B41A051B /* MqttSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MqttSupportTests.swift; sourceTree = "<group>"; };
 		F1000018 /* WebhookRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookRetryPolicy.swift; sourceTree = "<group>"; };
 		F1000019 /* SleepSessionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepSessionBuilder.swift; sourceTree = "<group>"; };
 		F100001A /* WebhookSignerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookSignerTests.swift; sourceTree = "<group>"; };
 		F100001B /* WebhookRetryPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookRetryPolicyTests.swift; sourceTree = "<group>"; };
 		F100001C /* SleepSessionBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepSessionBuilderTests.swift; sourceTree = "<group>"; };
-		F1000020 /* LifeDashboardCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LifeDashboardCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F1000021 /* LifeDashboardCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LifeDashboardCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F100001D /* SyncLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLimits.swift; sourceTree = "<group>"; };
 		F100001E /* MenstruationPeriodBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenstruationPeriodBuilder.swift; sourceTree = "<group>"; };
 		F100001F /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		F1000020 /* LifeDashboardCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LifeDashboardCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1000021 /* LifeDashboardCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LifeDashboardCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F1000022 /* LogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStore.swift; sourceTree = "<group>"; };
 		F1000023 /* AboutScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutScreen.swift; sourceTree = "<group>"; };
-		F1000040 /* DashboardCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCard.swift; sourceTree = "<group>"; };
 		F1000024 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F1000025 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		F1000026 /* SyncLimitsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLimitsTests.swift; sourceTree = "<group>"; };
@@ -132,6 +131,7 @@
 		F100002C /* SharedSyncStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSyncStatus.swift; sourceTree = "<group>"; };
 		F100002D /* SyncHealthDataIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHealthDataIntent.swift; sourceTree = "<group>"; };
 		F100002E /* SyncFailureNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncFailureNotifier.swift; sourceTree = "<group>"; };
+		F1000040 /* DashboardCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -245,16 +245,6 @@
 			path = Screens;
 			sourceTree = "<group>";
 		};
-		D1000008 /* LifeDashboardWidget */ = {
-			isa = PBXGroup;
-			children = (
-				F1000028 /* LifeDashboardWidget.swift */,
-				F1000029 /* Info.plist */,
-				F100002B /* LifeDashboardWidget.entitlements */,
-			);
-			path = LifeDashboardWidget;
-			sourceTree = "<group>";
-		};
 		D1000007 /* LifeDashboardCompanionTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -267,6 +257,16 @@
 				F1000027 /* MenstruationPeriodBuilderTests.swift */,
 			);
 			path = LifeDashboardCompanionTests;
+			sourceTree = "<group>";
+		};
+		D1000008 /* LifeDashboardWidget */ = {
+			isa = PBXGroup;
+			children = (
+				F1000028 /* LifeDashboardWidget.swift */,
+				F1000029 /* Info.plist */,
+				F100002B /* LifeDashboardWidget.entitlements */,
+			);
+			path = LifeDashboardWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -325,19 +325,6 @@
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
-
-/* Begin PBXTargetDependency section */
-		CD000001 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C1000001 /* LifeDashboardCompanion */;
-			targetProxy = CP000001 /* PBXContainerItemProxy */;
-		};
-		CD000002 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C1000004 /* LifeDashboardWidget */;
-			targetProxy = CP000002 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		C1000002 /* Project object */ = {
@@ -430,15 +417,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E1000006 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B1000029 /* LifeDashboardWidget.swift in Sources */,
-				B100002B /* SharedSyncStatus.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		E1000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -453,7 +431,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E1000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000029 /* LifeDashboardWidget.swift in Sources */,
+				B100002B /* SharedSyncStatus.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CD000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1000001 /* LifeDashboardCompanion */;
+			targetProxy = CP000001 /* PBXContainerItemProxy */;
+		};
+		CD000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1000004 /* LifeDashboardWidget */;
+			targetProxy = CP000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA000001 /* Debug */ = {
@@ -586,15 +586,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LifeDashboardCompanion/LifeDashboardCompanion.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B92ASNRFPF;
+				DEVELOPMENT_TEAM = H72UY5C65X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LifeDashboardCompanion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Life Dashboard needs access to your health data to sync it to your personal dashboard via webhooks.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life Dashboard does not write health data, but this permission is required by the system.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to deliver your health data to webhook servers and MQTT brokers on your own local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -605,8 +607,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.owen282000.lifedashboard;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.sjp.healthsync;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -619,15 +622,17 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LifeDashboardCompanion/LifeDashboardCompanion.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B92ASNRFPF;
+				DEVELOPMENT_TEAM = H72UY5C65X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LifeDashboardCompanion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Life Dashboard needs access to your health data to sync it to your personal dashboard via webhooks.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life Dashboard does not write health data, but this permission is required by the system.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to deliver your health data to webhook servers and MQTT brokers on your own local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -638,60 +643,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.owen282000.lifedashboard;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.sjp.healthsync;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		AA000007 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = LifeDashboardWidget/LifeDashboardWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B92ASNRFPF;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LifeDashboardWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.owen282000.lifedashboard.widget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		AA000008 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = LifeDashboardWidget/LifeDashboardWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = B92ASNRFPF;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LifeDashboardWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.3.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.owen282000.lifedashboard.widget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -731,6 +685,58 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LifeDashboardCompanion.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LifeDashboardCompanion";
+			};
+			name = Release;
+		};
+		AA000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LifeDashboardWidget/LifeDashboardWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = H72UY5C65X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeDashboardWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.sjp.healthsync.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LifeDashboardWidget/LifeDashboardWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = H72UY5C65X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeDashboardWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Life Dashboard";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.sjp.healthsync.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
