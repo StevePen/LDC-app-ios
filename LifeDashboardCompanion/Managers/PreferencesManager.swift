@@ -171,19 +171,29 @@ final class PreferencesManager: ObservableObject, @unchecked Sendable {
 
     // MARK: - HKQueryAnchor Persistence
 
-    func saveAnchor(_ anchor: HKQueryAnchor, for type: HealthDataType) {
+    // Anchors are keyed by HKSampleType identifier so composite HealthDataTypes
+    // (bloodPressure, nutrition, totalCalories) advance each underlying stream
+    // independently. Advancing them together lost samples when only one stream
+    // was over the per-sync cap.
+
+    func saveAnchor(_ anchor: HKQueryAnchor, for sampleType: HKSampleType) {
         let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true)
-        defaults.set(data, forKey: "hk_anchor_\(type.rawValue)")
+        defaults.set(data, forKey: "hk_anchor_st_\(sampleType.identifier)")
     }
 
-    func loadAnchor(for type: HealthDataType) -> HKQueryAnchor? {
-        guard let data = defaults.data(forKey: "hk_anchor_\(type.rawValue)") else { return nil }
+    func loadAnchor(for sampleType: HKSampleType) -> HKQueryAnchor? {
+        guard let data = defaults.data(forKey: "hk_anchor_st_\(sampleType.identifier)") else { return nil }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
     }
 
     func clearAllAnchors() {
         for type in HealthDataType.allCases {
+            // Legacy per-HealthDataType keys, cleared so upgrades from pre-fix builds
+            // start from a clean slate rather than leaving orphaned defaults behind.
             defaults.removeObject(forKey: "hk_anchor_\(type.rawValue)")
+            for sampleType in type.hkSampleTypes {
+                defaults.removeObject(forKey: "hk_anchor_st_\(sampleType.identifier)")
+            }
         }
     }
 

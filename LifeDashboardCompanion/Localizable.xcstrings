@@ -200,6 +200,15 @@
     "Remove webhook URL" : {
 
     },
+    "Reset" : {
+
+    },
+    "Reset sync anchors" : {
+
+    },
+    "Reset sync anchors?" : {
+
+    },
     "Retry Now" : {
 
     },
@@ -237,6 +246,9 @@
 
     },
     "Syncs your Apple Health data to your own webhook endpoints for automated life tracking." : {
+
+    },
+    "The next sync will re-read every enabled type from 1 Sep 2025. Existing records are deduplicated downstream by uuid." : {
 
     },
     "This device does not support HealthKit." : {
