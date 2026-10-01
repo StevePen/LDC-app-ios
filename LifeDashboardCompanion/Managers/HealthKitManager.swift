@@ -235,7 +235,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
             if samples.count >= limit { hasMore = true }
         }
 
-        let fragments = formatFragments(for: dataType, samplesByType: samplesByType)
+        let fragments = try await formatFragments(for: dataType, samplesByType: samplesByType)
         let recordCount = fragments.values.reduce(0) { total, value in
             total + ((value as? [Any])?.count ?? 0)
         }
@@ -294,7 +294,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
     private func formatFragments(
         for dataType: HealthDataType,
         samplesByType: [HKSampleType: [HKSample]]
-    ) -> [String: Any] {
+    ) async throws -> [String: Any] {
         func quantity(_ type: HKQuantityType) -> [HKQuantitySample] {
             (samplesByType[type] ?? []).compactMap { $0 as? HKQuantitySample }
         }
@@ -473,8 +473,16 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
 
         case .exercise:
             let workouts = (samplesByType[HKWorkoutType.workoutType()] ?? []).compactMap { $0 as? HKWorkout }
-            let mapped = workouts.map { buildWorkoutSummary($0) }
-            return mapped.isEmpty ? [:] : ["exercise": mapped]
+            guard !workouts.isEmpty else { return [:] }
+            let summaries = workouts.map { buildWorkoutSummary($0) }
+            var samples: [[String: Any]] = []
+            for workout in workouts {
+                let rows = try await fetchWorkoutSamples(for: workout)
+                samples.append(contentsOf: rows)
+            }
+            var out: [String: Any] = ["exercise": summaries]
+            if !samples.isEmpty { out["workout_samples"] = samples }
+            return out
 
         case .hydration:
             let mapped = quantity(HKQuantityType(.dietaryWater)).map { sample -> [String: Any] in
@@ -596,6 +604,66 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
         record["uuid"] = sample.uuid.uuidString
         record["source"] = sample.sourceRevision.source.name
         return record
+    }
+
+    // MARK: - Workout Detail (time-series, step 2)
+
+    /// Pulls every relevant quantity sample recorded during `workout` as flat rows
+    /// for the `workout_samples` payload key. One secondary HK query per sample
+    /// type scoped by `HKQuery.predicateForObjects(from:)`. If a workout re-appears
+    /// on a later sync (edited, moved), its samples are re-sent and deduped
+    /// downstream on `(workout_uuid, uuid)`.
+    private func fetchWorkoutSamples(for workout: HKWorkout) async throws -> [[String: Any]] {
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        let workoutUuid = workout.uuid.uuidString
+        var out: [[String: Any]] = []
+        for (identifier, mapping) in Self.statMappings {
+            guard let qType = HKObjectType.quantityType(
+                forIdentifier: HKQuantityTypeIdentifier(rawValue: identifier)
+            ) else { continue }
+            let samples = try await readQuantitySamplesMatching(type: qType, predicate: predicate)
+            for sample in samples {
+                var row: [String: Any] = [
+                    "workout_uuid": workoutUuid,
+                    "type": mapping.publicKey,
+                    "time": sample.startDate.iso8601String,
+                    "value": sample.quantity.doubleValue(for: mapping.unit),
+                    "unit": mapping.unitLabel,
+                    "uuid": sample.uuid.uuidString,
+                    "source": sample.sourceRevision.source.name
+                ]
+                if sample.startDate != sample.endDate {
+                    row["end_time"] = sample.endDate.iso8601String
+                }
+                out.append(row)
+            }
+        }
+        return out
+    }
+
+    /// Like `readQuantitySamples(type:start:end:limit:)` but driven by an arbitrary
+    /// predicate (used with `HKQuery.predicateForObjects(from:)` to scope samples
+    /// to a specific workout). No upper limit: the predicate already bounds the set.
+    private func readQuantitySamplesMatching(
+        type: HKQuantityType,
+        predicate: NSPredicate
+    ) async throws -> [HKQuantitySample] {
+        try await withCheckedThrowingContinuation { continuation in
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: (samples as? [HKQuantitySample]) ?? [])
+            }
+            healthStore.execute(query)
+        }
     }
 
     // MARK: - Workout Detail (summary, step 1)
