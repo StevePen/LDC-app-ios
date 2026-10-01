@@ -1,0 +1,7 @@
+# Supabase project home-tracker (ref saajdgzgkxbizkmapnhd, eu-west-2).
+project_id = "home-tracker"
+
+# The function authenticates with x-ingest-token itself. Deploying with JWT
+# verification on would reject every sync from the phone with 401.
+[functions.health-ingest]
+verify_jwt = false
