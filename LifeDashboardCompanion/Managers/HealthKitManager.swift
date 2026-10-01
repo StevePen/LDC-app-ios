@@ -473,14 +473,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
 
         case .exercise:
             let workouts = (samplesByType[HKWorkoutType.workoutType()] ?? []).compactMap { $0 as? HKWorkout }
-            let mapped = workouts.map { workout -> [String: Any] in
-                record([
-                    "type": workout.workoutActivityType.name,
-                    "start_time": workout.startDate.iso8601String,
-                    "end_time": workout.endDate.iso8601String,
-                    "duration_seconds": Int(workout.duration)
-                ], from: workout)
-            }
+            let mapped = workouts.map { buildWorkoutSummary($0) }
             return mapped.isEmpty ? [:] : ["exercise": mapped]
 
         case .hydration:
@@ -604,6 +597,308 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
         record["source"] = sample.sourceRevision.source.name
         return record
     }
+
+    // MARK: - Workout Detail (summary, step 1)
+
+    /// Builds the per-workout summary dict carried under the `exercise` payload key.
+    /// Pulls everything available without secondary queries: allStatistics, activities,
+    /// events, device, metadata (raw and parsed convenience fields).
+    private func buildWorkoutSummary(_ workout: HKWorkout) -> [String: Any] {
+        var fields: [String: Any] = [
+            "type": workout.workoutActivityType.name,
+            "start_time": workout.startDate.iso8601String,
+            "end_time": workout.endDate.iso8601String,
+            "duration_seconds": Int(workout.duration)
+        ]
+
+        let statistics = workoutStatisticsDict(workout.allStatistics)
+        if !statistics.isEmpty { fields["statistics"] = statistics }
+
+        let activities = workoutActivitiesArray(workout.workoutActivities)
+        if !activities.isEmpty { fields["activities"] = activities }
+
+        let events = workoutEventsArray(workout.workoutEvents ?? [])
+        if !events.isEmpty { fields["events"] = events }
+
+        let device = workoutDeviceDict(workout)
+        if !device.isEmpty { fields["device"] = device }
+
+        for (key, value) in workoutParsedMetadata(workout.metadata) {
+            fields[key] = value
+        }
+
+        if let raw = workout.metadata, !raw.isEmpty {
+            fields["metadata"] = jsonSafeMetadata(raw)
+        }
+
+        return record(fields, from: workout)
+    }
+
+    /// Converts `HKWorkout.allStatistics` ([HKQuantityType: HKStatistics]) to a nested
+    /// JSON-safe dict keyed by a short public key per quantity type. Each entry carries
+    /// a `unit` label plus whichever of `sum`, `avg`, `min`, `max` is applicable.
+    private func workoutStatisticsDict(_ stats: [HKQuantityType: HKStatistics]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (type, s) in stats {
+            guard let mapping = Self.statMappings[type.identifier] else { continue }
+            var entry: [String: Any] = ["unit": mapping.unitLabel]
+            if mapping.hasSum, let v = s.sumQuantity()?.doubleValue(for: mapping.unit) {
+                entry["sum"] = v
+            }
+            if mapping.hasAvgMinMax {
+                if let v = s.averageQuantity()?.doubleValue(for: mapping.unit) { entry["avg"] = v }
+                if let v = s.minimumQuantity()?.doubleValue(for: mapping.unit) { entry["min"] = v }
+                if let v = s.maximumQuantity()?.doubleValue(for: mapping.unit) { entry["max"] = v }
+            }
+            if entry.count > 1 {  // skip entries where nothing beyond `unit` was populated
+                out[mapping.publicKey] = entry
+            }
+        }
+        return out
+    }
+
+    private func workoutActivitiesArray(_ activities: [HKWorkoutActivity]) -> [[String: Any]] {
+        activities.map { activity in
+            var dict: [String: Any] = [
+                "uuid": activity.uuid.uuidString,
+                "type": activity.workoutConfiguration.activityType.name,
+                "location_type": locationTypeName(activity.workoutConfiguration.locationType),
+                "start_time": activity.startDate.iso8601String,
+                "duration_seconds": Int(activity.duration)
+            ]
+            if let endDate = activity.endDate {
+                dict["end_time"] = endDate.iso8601String
+            }
+            if activity.workoutConfiguration.swimmingLocationType != .unknown {
+                dict["swimming_location_type"] = swimmingLocationTypeName(
+                    activity.workoutConfiguration.swimmingLocationType
+                )
+            }
+            if let lapLength = activity.workoutConfiguration.lapLength {
+                dict["lap_length_m"] = lapLength.doubleValue(for: .meter())
+            }
+            let statistics = workoutStatisticsDict(activity.allStatistics)
+            if !statistics.isEmpty { dict["statistics"] = statistics }
+            if let metadata = activity.metadata, !metadata.isEmpty {
+                dict["metadata"] = jsonSafeMetadata(metadata)
+            }
+            return dict
+        }
+    }
+
+    private func workoutEventsArray(_ events: [HKWorkoutEvent]) -> [[String: Any]] {
+        events.map { event in
+            var dict: [String: Any] = [
+                "type": eventTypeName(event.type),
+                "start_time": event.dateInterval.start.iso8601String,
+                "duration_seconds": event.dateInterval.duration
+            ]
+            if let metadata = event.metadata, !metadata.isEmpty {
+                dict["metadata"] = jsonSafeMetadata(metadata)
+            }
+            return dict
+        }
+    }
+
+    private func workoutDeviceDict(_ workout: HKWorkout) -> [String: Any] {
+        var out: [String: Any] = [:]
+        let revision = workout.sourceRevision
+        out["source_version"] = revision.version ?? ""
+        out["source_product_type"] = revision.productType ?? ""
+        out["source_os_version"] = "\(revision.operatingSystemVersion.majorVersion)."
+            + "\(revision.operatingSystemVersion.minorVersion)."
+            + "\(revision.operatingSystemVersion.patchVersion)"
+        if let device = workout.device {
+            if let name = device.name { out["name"] = name }
+            if let manufacturer = device.manufacturer { out["manufacturer"] = manufacturer }
+            if let model = device.model { out["model"] = model }
+            if let hardwareVersion = device.hardwareVersion { out["hardware_version"] = hardwareVersion }
+            if let softwareVersion = device.softwareVersion { out["software_version"] = softwareVersion }
+            if let firmwareVersion = device.firmwareVersion { out["firmware_version"] = firmwareVersion }
+        }
+        return out
+    }
+
+    /// Explicit conversions for well-known metadata keys so downstream can rely on
+    /// consistent names and units. The raw dict is still carried under `metadata`.
+    private func workoutParsedMetadata(_ metadata: [String: Any]?) -> [String: Any] {
+        guard let md = metadata else { return [:] }
+        var out: [String: Any] = [:]
+        if let indoor = md[HKMetadataKeyIndoorWorkout] as? Bool {
+            out["indoor"] = indoor
+        }
+        if let elevation = md[HKMetadataKeyElevationAscended] as? HKQuantity {
+            out["elevation_ascended_m"] = elevation.doubleValue(for: .meter())
+        }
+        if let elevation = md[HKMetadataKeyElevationDescended] as? HKQuantity {
+            out["elevation_descended_m"] = elevation.doubleValue(for: .meter())
+        }
+        if let temp = md[HKMetadataKeyWeatherTemperature] as? HKQuantity {
+            out["weather_temperature_c"] = temp.doubleValue(for: .degreeCelsius())
+        }
+        if let humidity = md[HKMetadataKeyWeatherHumidity] as? HKQuantity {
+            out["weather_humidity_percent"] = humidity.doubleValue(for: .percent()) * 100
+        }
+        if let condition = md[HKMetadataKeyWeatherCondition] as? Int {
+            out["weather_condition_raw"] = condition
+        }
+        if let lapLength = md[HKMetadataKeyLapLength] as? HKQuantity {
+            out["lap_length_m"] = lapLength.doubleValue(for: .meter())
+        }
+        if let locationType = md[HKMetadataKeySwimmingLocationType] as? Int {
+            out["swimming_location_type_raw"] = locationType
+        }
+        if let strokeStyle = md[HKMetadataKeySwimmingStrokeStyle] as? Int {
+            out["swimming_stroke_style_raw"] = strokeStyle
+        }
+        return out
+    }
+
+    /// Flattens an arbitrary metadata dict into values JSONSerialization can handle:
+    /// String, NSNumber, Date (stringified), HKQuantity (description), nested arrays
+    /// and dicts recurse. Anything else falls back to its `description`.
+    private func jsonSafeMetadata(_ metadata: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (key, value) in metadata {
+            out[key] = jsonSafeValue(value)
+        }
+        return out
+    }
+
+    private func jsonSafeValue(_ value: Any) -> Any {
+        switch value {
+        case let s as String:
+            return s
+        case let d as Date:
+            return d.iso8601String
+        case let q as HKQuantity:
+            return String(describing: q)
+        case let n as NSNumber:
+            return n
+        case let arr as [Any]:
+            return arr.map { jsonSafeValue($0) }
+        case let dict as [String: Any]:
+            return dict.mapValues { jsonSafeValue($0) }
+        default:
+            return String(describing: value)
+        }
+    }
+
+    private func locationTypeName(_ type: HKWorkoutSessionLocationType) -> String {
+        switch type {
+        case .indoor: return "indoor"
+        case .outdoor: return "outdoor"
+        case .unknown: return "unknown"
+        @unknown default: return "unknown"
+        }
+    }
+
+    private func swimmingLocationTypeName(_ type: HKWorkoutSwimmingLocationType) -> String {
+        switch type {
+        case .pool: return "pool"
+        case .openWater: return "open_water"
+        case .unknown: return "unknown"
+        @unknown default: return "unknown"
+        }
+    }
+
+    private func eventTypeName(_ type: HKWorkoutEventType) -> String {
+        switch type {
+        case .pause: return "pause"
+        case .resume: return "resume"
+        case .lap: return "lap"
+        case .marker: return "marker"
+        case .motionPaused: return "motion_paused"
+        case .motionResumed: return "motion_resumed"
+        case .pauseOrResumeRequest: return "pause_or_resume_request"
+        case .segment: return "segment"
+        @unknown default: return "unknown"
+        }
+    }
+
+    private struct StatMapping {
+        let unit: HKUnit
+        let unitLabel: String
+        let publicKey: String
+        let hasSum: Bool
+        let hasAvgMinMax: Bool
+    }
+
+    private static let statMappings: [String: StatMapping] = {
+        let bpm = HKUnit.count().unitDivided(by: .minute())
+        let mps = HKUnit.meter().unitDivided(by: .second())
+        let rpm = HKUnit.count().unitDivided(by: .minute())
+        return [
+            HKQuantityTypeIdentifier.distanceWalkingRunning.rawValue:
+                StatMapping(unit: .meter(), unitLabel: "m",
+                            publicKey: "distance_walking_running",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.distanceCycling.rawValue:
+                StatMapping(unit: .meter(), unitLabel: "m",
+                            publicKey: "distance_cycling",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.distanceSwimming.rawValue:
+                StatMapping(unit: .meter(), unitLabel: "m",
+                            publicKey: "distance_swimming",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.activeEnergyBurned.rawValue:
+                StatMapping(unit: .kilocalorie(), unitLabel: "kcal",
+                            publicKey: "active_energy",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.basalEnergyBurned.rawValue:
+                StatMapping(unit: .kilocalorie(), unitLabel: "kcal",
+                            publicKey: "basal_energy",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.heartRate.rawValue:
+                StatMapping(unit: bpm, unitLabel: "bpm",
+                            publicKey: "heart_rate",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.stepCount.rawValue:
+                StatMapping(unit: .count(), unitLabel: "count",
+                            publicKey: "step_count",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.flightsClimbed.rawValue:
+                StatMapping(unit: .count(), unitLabel: "count",
+                            publicKey: "flights_climbed",
+                            hasSum: true, hasAvgMinMax: false),
+            HKQuantityTypeIdentifier.runningPower.rawValue:
+                StatMapping(unit: .watt(), unitLabel: "W",
+                            publicKey: "running_power",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.runningSpeed.rawValue:
+                StatMapping(unit: mps, unitLabel: "m/s",
+                            publicKey: "running_speed",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.runningStrideLength.rawValue:
+                StatMapping(unit: .meter(), unitLabel: "m",
+                            publicKey: "running_stride_length",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.runningVerticalOscillation.rawValue:
+                StatMapping(unit: .meterUnit(with: .centi), unitLabel: "cm",
+                            publicKey: "running_vertical_oscillation",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.runningGroundContactTime.rawValue:
+                StatMapping(unit: .secondUnit(with: .milli), unitLabel: "ms",
+                            publicKey: "running_ground_contact_time",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.cyclingPower.rawValue:
+                StatMapping(unit: .watt(), unitLabel: "W",
+                            publicKey: "cycling_power",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.cyclingSpeed.rawValue:
+                StatMapping(unit: mps, unitLabel: "m/s",
+                            publicKey: "cycling_speed",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.cyclingCadence.rawValue:
+                StatMapping(unit: rpm, unitLabel: "rpm",
+                            publicKey: "cycling_cadence",
+                            hasSum: false, hasAvgMinMax: true),
+            HKQuantityTypeIdentifier.swimmingStrokeCount.rawValue:
+                StatMapping(unit: .count(), unitLabel: "count",
+                            publicKey: "swimming_stroke_count",
+                            hasSum: true, hasAvgMinMax: false)
+        ]
+    }()
 
     /// Reads data for a single HealthDataType. Returns (payloadKey, data) pairs or nil if empty.
     /// Most types produce one pair; menstruation produces both flow records and derived periods.
