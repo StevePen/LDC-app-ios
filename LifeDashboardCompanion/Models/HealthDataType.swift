@@ -136,6 +136,41 @@ enum HealthDataType: String, CaseIterable, Codable, Identifiable {
     }
 
     var hkReadTypes: Set<HKObjectType> {
-        Set(hkSampleTypes.map { $0 as HKObjectType })
+        var types = Set<HKObjectType>(hkSampleTypes.map { $0 as HKObjectType })
+        if self == .exercise {
+            // Workout detail pulls per-workout time-series and routes. Auth needs to
+            // cover every quantity type queried by HealthKitManager.fetchWorkoutSamples
+            // plus HKSeriesType.workoutRoute(); otherwise HK throws "Authorization not
+            // determined" and the whole exercise sync fails for that page.
+            types.insert(HKSeriesType.workoutRoute())
+            for identifier in Self.workoutDetailQuantityIdentifiers {
+                if let quantityType = HKObjectType.quantityType(
+                    forIdentifier: HKQuantityTypeIdentifier(rawValue: identifier)
+                ) {
+                    types.insert(quantityType)
+                }
+            }
+        }
+        return types
     }
+
+    private static let workoutDetailQuantityIdentifiers: [String] = [
+        HKQuantityTypeIdentifier.distanceWalkingRunning.rawValue,
+        HKQuantityTypeIdentifier.distanceCycling.rawValue,
+        HKQuantityTypeIdentifier.distanceSwimming.rawValue,
+        HKQuantityTypeIdentifier.activeEnergyBurned.rawValue,
+        HKQuantityTypeIdentifier.basalEnergyBurned.rawValue,
+        HKQuantityTypeIdentifier.heartRate.rawValue,
+        HKQuantityTypeIdentifier.stepCount.rawValue,
+        HKQuantityTypeIdentifier.flightsClimbed.rawValue,
+        HKQuantityTypeIdentifier.runningPower.rawValue,
+        HKQuantityTypeIdentifier.runningSpeed.rawValue,
+        HKQuantityTypeIdentifier.runningStrideLength.rawValue,
+        HKQuantityTypeIdentifier.runningVerticalOscillation.rawValue,
+        HKQuantityTypeIdentifier.runningGroundContactTime.rawValue,
+        HKQuantityTypeIdentifier.cyclingPower.rawValue,
+        HKQuantityTypeIdentifier.cyclingSpeed.rawValue,
+        HKQuantityTypeIdentifier.cyclingCadence.rawValue,
+        HKQuantityTypeIdentifier.swimmingStrokeCount.rawValue
+    ]
 }
