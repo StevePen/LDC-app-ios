@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import UIKit
 import OSLog
+import CoreLocation
 
 /// @unchecked Sendable: HKHealthStore is thread-safe, `isAvailable` is set once in init,
 /// and the @Published authorization status is only mutated via the @MainActor method.
@@ -476,12 +477,16 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
             guard !workouts.isEmpty else { return [:] }
             let summaries = workouts.map { buildWorkoutSummary($0) }
             var samples: [[String: Any]] = []
+            var route: [[String: Any]] = []
             for workout in workouts {
-                let rows = try await fetchWorkoutSamples(for: workout)
-                samples.append(contentsOf: rows)
+                async let sampleRows = fetchWorkoutSamples(for: workout)
+                async let routeRows = fetchWorkoutRoute(for: workout)
+                samples.append(contentsOf: try await sampleRows)
+                route.append(contentsOf: try await routeRows)
             }
             var out: [String: Any] = ["exercise": summaries]
             if !samples.isEmpty { out["workout_samples"] = samples }
+            if !route.isEmpty { out["workout_route"] = route }
             return out
 
         case .hydration:
@@ -604,6 +609,95 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
         record["uuid"] = sample.uuid.uuidString
         record["source"] = sample.sourceRevision.source.name
         return record
+    }
+
+    // MARK: - Workout Detail (route, step 3)
+
+    /// Pulls every GPS point from the workout's route(s) as flat rows for the
+    /// `workout_route` payload key. Only Watch outdoor workouts write routes.
+    /// Returns an empty array for workouts without routes (indoor, NRC, Peloton).
+    private func fetchWorkoutRoute(for workout: HKWorkout) async throws -> [[String: Any]] {
+        let routes = try await readWorkoutRoutes(for: workout)
+        guard !routes.isEmpty else { return [] }
+        let workoutUuid = workout.uuid.uuidString
+        var out: [[String: Any]] = []
+        for route in routes {
+            let locations = try await readRouteLocations(route: route)
+            let routeUuid = route.uuid.uuidString
+            for location in locations {
+                var row: [String: Any] = [
+                    "workout_uuid": workoutUuid,
+                    "route_uuid": routeUuid,
+                    "timestamp": location.timestamp.iso8601String,
+                    "lat": location.coordinate.latitude,
+                    "lon": location.coordinate.longitude,
+                    "altitude_m": location.altitude,
+                    "h_accuracy_m": location.horizontalAccuracy,
+                    "v_accuracy_m": location.verticalAccuracy,
+                    "speed_mps": location.speed,
+                    "speed_accuracy_mps": location.speedAccuracy,
+                    "course_deg": location.course,
+                    "course_accuracy_deg": location.courseAccuracy
+                ]
+                if let floor = location.floor {
+                    row["floor_level"] = floor.level
+                }
+                out.append(row)
+            }
+        }
+        return out
+    }
+
+    private func readWorkoutRoutes(for workout: HKWorkout) async throws -> [HKWorkoutRoute] {
+        try await withCheckedThrowingContinuation { continuation in
+            let predicate = HKQuery.predicateForObjects(from: workout)
+            let query = HKSampleQuery(
+                sampleType: HKSeriesType.workoutRoute(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: (samples as? [HKWorkoutRoute]) ?? [])
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// HKWorkoutRouteQuery delivers CLLocations in batches via a handler that is
+    /// called repeatedly until `done == true`. The accumulator lives in a reference
+    /// type so Swift concurrency sees stable captured identity; HK invokes the
+    /// handler on a serial queue, which gives us the actual thread safety.
+    private func readRouteLocations(route: HKWorkoutRoute) async throws -> [CLLocation] {
+        try await withCheckedThrowingContinuation { continuation in
+            let box = RouteLocationsBox()
+            let query = HKWorkoutRouteQuery(route: route) { _, locations, isDone, error in
+                if box.resumed { return }
+                if let error = error {
+                    box.resumed = true
+                    continuation.resume(throwing: error)
+                    return
+                }
+                if let locations = locations {
+                    box.locations.append(contentsOf: locations)
+                }
+                if isDone {
+                    box.resumed = true
+                    continuation.resume(returning: box.locations)
+                }
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// @unchecked Sendable: mutated only from HKWorkoutRouteQuery's handler which
+    /// Apple calls serially per query.
+    private final class RouteLocationsBox: @unchecked Sendable {
+        var locations: [CLLocation] = []
+        var resumed = false
     }
 
     // MARK: - Workout Detail (time-series, step 2)
