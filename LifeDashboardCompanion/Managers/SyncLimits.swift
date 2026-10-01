@@ -10,6 +10,10 @@ enum SyncLimits {
             return 1000
         case .heartRateVariability, .respiratoryRate:
             return 500
+        case .exercise:
+            // Each workout triggers up to ~17 secondary HK queries and ~1k-2k
+            // sample rows under workout_samples, so pages are deliberately small.
+            return 10
         default:
             return 200
         }
