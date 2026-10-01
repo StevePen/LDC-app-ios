@@ -474,6 +474,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
 
         case .exercise:
             let workouts = (samplesByType[HKWorkoutType.workoutType()] ?? []).compactMap { $0 as? HKWorkout }
+            logger.info("Exercise page: \(workouts.count) workouts; expanding detail")
             guard !workouts.isEmpty else { return [:] }
             let summaries = workouts.map { buildWorkoutSummary($0) }
             var samples: [[String: Any]] = []
@@ -484,6 +485,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
                 samples.append(contentsOf: await sampleRows)
                 route.append(contentsOf: await routeRows)
             }
+            logger.info("Exercise page built: \(summaries.count) summaries, \(samples.count) samples, \(route.count) route points")
             var out: [String: Any] = ["exercise": summaries]
             if !samples.isEmpty { out["workout_samples"] = samples }
             if !route.isEmpty { out["workout_route"] = route }
