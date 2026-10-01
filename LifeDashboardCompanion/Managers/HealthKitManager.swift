@@ -481,8 +481,8 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
             for workout in workouts {
                 async let sampleRows = fetchWorkoutSamples(for: workout)
                 async let routeRows = fetchWorkoutRoute(for: workout)
-                samples.append(contentsOf: try await sampleRows)
-                route.append(contentsOf: try await routeRows)
+                samples.append(contentsOf: await sampleRows)
+                route.append(contentsOf: await routeRows)
             }
             var out: [String: Any] = ["exercise": summaries]
             if !samples.isEmpty { out["workout_samples"] = samples }
@@ -616,13 +616,25 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
     /// Pulls every GPS point from the workout's route(s) as flat rows for the
     /// `workout_route` payload key. Only Watch outdoor workouts write routes.
     /// Returns an empty array for workouts without routes (indoor, NRC, Peloton).
-    private func fetchWorkoutRoute(for workout: HKWorkout) async throws -> [[String: Any]] {
-        let routes = try await readWorkoutRoutes(for: workout)
+    private func fetchWorkoutRoute(for workout: HKWorkout) async -> [[String: Any]] {
+        let routes: [HKWorkoutRoute]
+        do {
+            routes = try await readWorkoutRoutes(for: workout)
+        } catch {
+            logger.info("Workout route lookup skipped: \(error.localizedDescription)")
+            return []
+        }
         guard !routes.isEmpty else { return [] }
         let workoutUuid = workout.uuid.uuidString
         var out: [[String: Any]] = []
         for route in routes {
-            let locations = try await readRouteLocations(route: route)
+            let locations: [CLLocation]
+            do {
+                locations = try await readRouteLocations(route: route)
+            } catch {
+                logger.info("Workout route enumeration failed: \(error.localizedDescription)")
+                continue
+            }
             let routeUuid = route.uuid.uuidString
             for location in locations {
                 var row: [String: Any] = [
@@ -707,7 +719,7 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
     /// type scoped by `HKQuery.predicateForObjects(from:)`. If a workout re-appears
     /// on a later sync (edited, moved), its samples are re-sent and deduped
     /// downstream on `(workout_uuid, uuid)`.
-    private func fetchWorkoutSamples(for workout: HKWorkout) async throws -> [[String: Any]] {
+    private func fetchWorkoutSamples(for workout: HKWorkout) async -> [[String: Any]] {
         let predicate = HKQuery.predicateForObjects(from: workout)
         let workoutUuid = workout.uuid.uuidString
         var out: [[String: Any]] = []
@@ -715,7 +727,16 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
             guard let qType = HKObjectType.quantityType(
                 forIdentifier: HKQuantityTypeIdentifier(rawValue: identifier)
             ) else { continue }
-            let samples = try await readQuantitySamplesMatching(type: qType, predicate: predicate)
+            // Each per-type read is independent: a denied/undetermined auth for one
+            // metric (e.g. runningPower on a non-supporting device) must not blow up
+            // the whole exercise page.
+            let samples: [HKQuantitySample]
+            do {
+                samples = try await readQuantitySamplesMatching(type: qType, predicate: predicate)
+            } catch {
+                logger.info("Workout sample read skipped for \(identifier): \(error.localizedDescription)")
+                continue
+            }
             for sample in samples {
                 var row: [String: Any] = [
                     "workout_uuid": workoutUuid,
