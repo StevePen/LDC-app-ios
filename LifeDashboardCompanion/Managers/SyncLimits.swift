@@ -11,9 +11,11 @@ enum SyncLimits {
         case .heartRateVariability, .respiratoryRate:
             return 500
         case .exercise:
-            // Each workout triggers up to ~17 secondary HK queries and ~1k-2k
-            // sample rows under workout_samples, so pages are deliberately small.
-            return 10
+            // Each workout can carry ~2k sample rows and up to ~1.8k route points,
+            // so a single workout's full detail is ~0.5-1 MB JSON. Keep pages to
+            // a few workouts so a POST stays well under WebhookManager's 30 s
+            // timeout; previous value of 10 was timing out on cellular catch-up.
+            return 3
         default:
             return 200
         }
