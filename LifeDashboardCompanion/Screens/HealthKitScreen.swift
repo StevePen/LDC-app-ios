@@ -18,6 +18,7 @@ struct HealthKitScreen: View {
     @State private var isLoadingPreview = false
     @State private var previewFullPayload: String = ""
     @State private var isTestingWebhook = false
+    @State private var showResetAnchorsAlert = false
 
     var body: some View {
         ScrollView {
@@ -522,6 +523,18 @@ struct HealthKitScreen: View {
             .buttonStyle(.borderedProminent)
             .disabled(prefs.healthWebhookUrls.isEmpty || prefs.healthEnabledDataTypes.isEmpty || isSyncing)
 
+            // Reset sync anchors — force the next sync to treat every enabled
+            // type as first-sync (last 7 days). Needed if an anchor gets stranded
+            // mid-history (e.g. from a runaway pull).
+            Button {
+                showResetAnchorsAlert = true
+            } label: {
+                Label("Reset sync anchors", systemImage: "arrow.counterclockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isSyncing)
+
             if let message = syncMessage {
                 Text(message)
                     .font(.caption)
@@ -532,6 +545,15 @@ struct HealthKitScreen: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
+        .alert("Reset sync anchors?", isPresented: $showResetAnchorsAlert) {
+            Button("Reset", role: .destructive) {
+                prefs.clearAllAnchors()
+                syncMessage = "Anchors reset. Next sync reads from 1 Sep 2025."
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The next sync will re-read every enabled type from 1 Sep 2025. Existing records are deduplicated downstream by uuid.")
+        }
     }
 
     private var previewSheet: some View {

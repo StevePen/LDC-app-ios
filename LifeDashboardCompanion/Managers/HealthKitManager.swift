@@ -16,12 +16,18 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
 
     static let lookbackDays: Int = 7
 
-    /// Result type indicating why data reading failed or returned empty
-    enum ReadResult {
-        case data([String: Any])
-        case empty
-        case protectedDataUnavailable
-    }
+    /// Fixed lower bound for the first sync of every data type. Set to cover the
+    /// backfill window Steve wants in Supabase (1 Sep 2025 onwards); once
+    /// anchors are set the predicate is dropped and later syncs pick up from
+    /// wherever the last POST left off.
+    static let firstSyncStartDate: Date = {
+        var components = DateComponents()
+        components.year = 2025
+        components.month = 9
+        components.day = 1
+        components.timeZone = TimeZone(identifier: "UTC")
+        return Calendar(identifier: .gregorian).date(from: components)!
+    }()
 
     /// Payload fragments produced by reading a single data type, safe to move across
     /// the task group boundary. @unchecked Sendable: the values are JSON value types
@@ -170,135 +176,424 @@ final class HealthKitManager: ObservableObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - Incremental (Anchor-Based) Reading
+    // MARK: - Incremental (Anchor-Based) Paged Reading
 
-    /// Reads only new data since the last successful sync using HKAnchoredObjectQuery.
-    /// Falls back to full 7-day read if no anchor exists (first sync).
-    /// Returns `.protectedDataUnavailable` if the device is locked and data is encrypted.
-    func readIncrementalData(
-        for enabledTypes: Set<HealthDataType>
-    ) async throws -> ReadResult {
-        // Stap 5: Check if HealthKit data is accessible (device may be locked)
+    /// One page of new samples for a single `HealthDataType`, produced by
+    /// `readNextPage(for:firstSync:)`. Anchors are returned rather than persisted
+    /// so the caller can save them only after the page's POST succeeds — advancing
+    /// past records that were never uploaded is what lost samples in the previous
+    /// implementation.
+    struct HealthPage: @unchecked Sendable {
+        let fragments: [String: Any]
+        let anchors: [(HKSampleType, HKQueryAnchor)]
+        let hasMore: Bool
+        let recordCount: Int
+    }
+
+    /// Outcome of a single page read.
+    enum HealthPageResult {
+        case data(HealthPage)
+        case empty
+        case protectedDataUnavailable
+    }
+
+    /// Reads one page of new samples for `dataType`. Each underlying `HKSampleType`
+    /// is queried through `HKAnchoredObjectQuery` capped at `SyncLimits`; the caller
+    /// pages again while `hasMore` is true, persisting anchors between pages only
+    /// on POST success.
+    ///
+    /// `firstSync` restricts every sample type to the last `lookbackDays` via a
+    /// start-date predicate. Callers pass true when none of the type's sample
+    /// types has a stored anchor yet.
+    func readNextPage(
+        for dataType: HealthDataType,
+        firstSync: Bool
+    ) async throws -> HealthPageResult {
         let isProtected = await MainActor.run { UIApplication.shared.isProtectedDataAvailable }
         guard isProtected else {
             logger.info("Protected data unavailable (device locked) - skipping HealthKit read")
             return .protectedDataUnavailable
         }
 
+        let limit = SyncLimits.maxRecordsPerSync(for: dataType)
+        let predicate: NSPredicate? = firstSync ? Self.firstSyncPredicate() : nil
         let prefs = PreferencesManager.shared
 
-        let results = await withTaskGroup(
-            of: PayloadFragments?.self
-        ) { group -> [String: Any] in
-            for dataType in enabledTypes {
-                group.addTask {
-                    do {
-                        guard let pairs = try await self.readIncrementalDataForType(dataType, prefs: prefs) else {
-                            return nil
-                        }
-                        return PayloadFragments(pairs: pairs)
-                    } catch {
-                        self.logger.error("Incremental read failed for \(dataType.rawValue): \(error.localizedDescription)")
-                        return nil
-                    }
-                }
-            }
+        var samplesByType: [HKSampleType: [HKSample]] = [:]
+        var newAnchors: [(HKSampleType, HKQueryAnchor)] = []
+        var hasMore = false
 
-            var payload: [String: Any] = [:]
-            for await result in group {
-                for (key, value) in result?.pairs ?? [] {
-                    payload[key] = value
-                }
-            }
-            return payload
-        }
-
-        return results.isEmpty ? .empty : .data(results)
-    }
-
-    /// Reads incremental data for a single type using HKAnchoredObjectQuery.
-    private func readIncrementalDataForType(
-        _ dataType: HealthDataType,
-        prefs: PreferencesManager
-    ) async throws -> [(String, Any)]? {
-        let anchor = prefs.loadAnchor(for: dataType)
-
-        // If no anchor exists, fall back to full 7-day read
-        guard anchor != nil else {
-            let startDate = Calendar.current.date(
-                byAdding: .day,
-                value: -HealthKitManager.lookbackDays,
-                to: Date()
-            )!
-            let result = try await readDataForType(dataType, start: startDate, end: Date())
-            // Save anchor after first full read
-            for sampleType in dataType.hkSampleTypes {
-                let newAnchor = try await queryAnchor(for: sampleType)
-                prefs.saveAnchor(newAnchor, for: dataType)
-            }
-            return result
-        }
-
-        // Use anchored queries for each sample type
-        var allNewSamples: [HKSample] = []
         for sampleType in dataType.hkSampleTypes {
-            let (samples, newAnchor) = try await anchoredQuery(
+            let (samples, newAnchor) = try await pagedAnchoredQuery(
                 sampleType: sampleType,
-                anchor: anchor
+                anchor: prefs.loadAnchor(for: sampleType),
+                limit: limit,
+                predicate: predicate
             )
-            allNewSamples.append(contentsOf: samples)
-            prefs.saveAnchor(newAnchor, for: dataType)
+            samplesByType[sampleType] = samples
+            newAnchors.append((sampleType, newAnchor))
+            if samples.count >= limit { hasMore = true }
         }
 
-        guard !allNewSamples.isEmpty else { return nil }
+        let fragments = formatFragments(for: dataType, samplesByType: samplesByType)
+        let recordCount = fragments.values.reduce(0) { total, value in
+            total + ((value as? [Any])?.count ?? 0)
+        }
 
-        // Use the full 7-day read for this type to get properly formatted data
-        // (anchored queries return raw samples; re-reading a short window is simpler
-        //  than duplicating all the type-specific formatting logic)
-        let earliest = allNewSamples.map(\.startDate).min() ?? Date()
-        let start = Calendar.current.date(byAdding: .hour, value: -1, to: earliest)!
-        return try await readDataForType(dataType, start: start, end: Date())
+        guard recordCount > 0 else { return .empty }
+        return .data(HealthPage(
+            fragments: fragments,
+            anchors: newAnchors,
+            hasMore: hasMore,
+            recordCount: recordCount
+        ))
     }
 
-    /// Performs an HKAnchoredObjectQuery and returns new samples + updated anchor.
-    private func anchoredQuery(
+    private static func firstSyncPredicate() -> NSPredicate {
+        HKQuery.predicateForSamples(
+            withStart: HealthKitManager.firstSyncStartDate,
+            end: nil,
+            options: .strictStartDate
+        )
+    }
+
+    /// Runs an anchored query for one sample type capped at `limit`. When the
+    /// returned count equals `limit` the caller must page again — the anchor
+    /// represents this page only, not the full remaining tail.
+    private func pagedAnchoredQuery(
         sampleType: HKSampleType,
-        anchor: HKQueryAnchor?
+        anchor: HKQueryAnchor?,
+        limit: Int,
+        predicate: NSPredicate?
     ) async throws -> ([HKSample], HKQueryAnchor) {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(
                 type: sampleType,
-                predicate: nil,
+                predicate: predicate,
                 anchor: anchor,
-                limit: HKObjectQueryNoLimit
+                limit: limit
             ) { _, addedSamples, _, newAnchor, error in
                 if let error = error {
                     continuation.resume(throwing: error)
                     return
                 }
-                continuation.resume(returning: (addedSamples ?? [], newAnchor ?? HKQueryAnchor(fromValue: 0)))
+                continuation.resume(returning: (
+                    addedSamples ?? [],
+                    newAnchor ?? HKQueryAnchor(fromValue: 0)
+                ))
             }
             healthStore.execute(query)
         }
     }
 
-    /// Gets the current anchor for a sample type (used for initial anchor save after full read).
-    private func queryAnchor(for sampleType: HKSampleType) async throws -> HKQueryAnchor {
-        try await withCheckedThrowingContinuation { continuation in
-            let query = HKAnchoredObjectQuery(
-                type: sampleType,
-                predicate: nil,
-                anchor: nil,
-                limit: 0  // We don't need the samples, just the anchor
-            ) { _, _, _, newAnchor, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: newAnchor ?? HKQueryAnchor(fromValue: 0))
-            }
-            healthStore.execute(query)
+    // MARK: - Payload Formatting (Incremental)
+
+    /// Formats a batch of new samples grouped by sample type into payload fragments
+    /// for one data type. Output shape is byte-compatible with `readDataForType`
+    /// so downstream (raw JSONB in Supabase) stays unchanged.
+    private func formatFragments(
+        for dataType: HealthDataType,
+        samplesByType: [HKSampleType: [HKSample]]
+    ) -> [String: Any] {
+        func quantity(_ type: HKQuantityType) -> [HKQuantitySample] {
+            (samplesByType[type] ?? []).compactMap { $0 as? HKQuantitySample }
         }
+        func category(_ type: HKCategoryType) -> [HKCategorySample] {
+            (samplesByType[type] ?? []).compactMap { $0 as? HKCategorySample }
+        }
+
+        switch dataType {
+        case .steps:
+            let mapped = quantity(HKQuantityType(.stepCount)).map { sample -> [String: Any] in
+                record([
+                    "count": Int(sample.quantity.doubleValue(for: .count())),
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["steps": mapped]
+
+        case .distance:
+            let mapped = quantity(HKQuantityType(.distanceWalkingRunning)).map { sample -> [String: Any] in
+                record([
+                    "meters": sample.quantity.doubleValue(for: .meter()),
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["distance": mapped]
+
+        case .activeCalories:
+            let mapped = quantity(HKQuantityType(.activeEnergyBurned)).map { sample -> [String: Any] in
+                record([
+                    "calories": sample.quantity.doubleValue(for: .kilocalorie()),
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["active_calories": mapped]
+
+        case .totalCalories:
+            let combined = quantity(HKQuantityType(.activeEnergyBurned))
+                + quantity(HKQuantityType(.basalEnergyBurned))
+            let mapped = combined.map { sample -> [String: Any] in
+                record([
+                    "calories": sample.quantity.doubleValue(for: .kilocalorie()),
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["total_calories": mapped]
+
+        case .weight:
+            let mapped = quantity(HKQuantityType(.bodyMass)).map { sample -> [String: Any] in
+                record([
+                    "kilograms": sample.quantity.doubleValue(for: .gramUnit(with: .kilo)),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["weight": mapped]
+
+        case .height:
+            let mapped = quantity(HKQuantityType(.height)).map { sample -> [String: Any] in
+                record([
+                    "meters": sample.quantity.doubleValue(for: .meter()),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["height": mapped]
+
+        case .heartRate:
+            let bpmUnit = HKUnit.count().unitDivided(by: .minute())
+            let mapped = quantity(HKQuantityType(.heartRate)).map { sample -> [String: Any] in
+                record([
+                    "bpm": Int(sample.quantity.doubleValue(for: bpmUnit)),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["heart_rate": mapped]
+
+        case .restingHeartRate:
+            let bpmUnit = HKUnit.count().unitDivided(by: .minute())
+            let mapped = quantity(HKQuantityType(.restingHeartRate)).map { sample -> [String: Any] in
+                record([
+                    "bpm": Int(sample.quantity.doubleValue(for: bpmUnit)),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["resting_heart_rate": mapped]
+
+        case .heartRateVariability:
+            let mapped = quantity(HKQuantityType(.heartRateVariabilitySDNN)).map { sample -> [String: Any] in
+                record([
+                    "heart_rate_variability_millis": sample.quantity.doubleValue(for: .secondUnit(with: .milli)),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["heart_rate_variability": mapped]
+
+        case .bloodPressure:
+            let systolic = quantity(HKQuantityType(.bloodPressureSystolic))
+            let diastolic = quantity(HKQuantityType(.bloodPressureDiastolic))
+            let mmHg = HKUnit.millimeterOfMercury()
+            var mapped: [[String: Any]] = []
+            for systolicSample in systolic {
+                let matchingDiastolic = diastolic.first {
+                    abs($0.startDate.timeIntervalSince(systolicSample.startDate)) < 1
+                }
+                var fields: [String: Any] = [
+                    "systolic": systolicSample.quantity.doubleValue(for: mmHg),
+                    "time": systolicSample.startDate.iso8601String
+                ]
+                if let diastolicSample = matchingDiastolic {
+                    fields["diastolic"] = diastolicSample.quantity.doubleValue(for: mmHg)
+                }
+                mapped.append(record(fields, from: systolicSample))
+            }
+            return mapped.isEmpty ? [:] : ["blood_pressure": mapped]
+
+        case .bloodGlucose:
+            let unit = HKUnit.moleUnit(with: .milli, molarMass: HKUnitMolarMassBloodGlucose).unitDivided(by: .liter())
+            let mapped = quantity(HKQuantityType(.bloodGlucose)).map { sample -> [String: Any] in
+                record([
+                    "mmol_per_liter": sample.quantity.doubleValue(for: unit),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["blood_glucose": mapped]
+
+        case .oxygenSaturation:
+            let mapped = quantity(HKQuantityType(.oxygenSaturation)).map { sample -> [String: Any] in
+                record([
+                    "percentage": sample.quantity.doubleValue(for: .percent()) * 100,
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["oxygen_saturation": mapped]
+
+        case .bodyTemperature:
+            let mapped = quantity(HKQuantityType(.bodyTemperature)).map { sample -> [String: Any] in
+                record([
+                    "celsius": sample.quantity.doubleValue(for: .degreeCelsius()),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["body_temperature": mapped]
+
+        case .respiratoryRate:
+            let mapped = quantity(HKQuantityType(.respiratoryRate)).map { sample -> [String: Any] in
+                record([
+                    "rate": sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["respiratory_rate": mapped]
+
+        case .bodyFat:
+            let mapped = quantity(HKQuantityType(.bodyFatPercentage)).map { sample -> [String: Any] in
+                record([
+                    "percentage": sample.quantity.doubleValue(for: .percent()) * 100,
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["body_fat": mapped]
+
+        case .leanBodyMass:
+            let mapped = quantity(HKQuantityType(.leanBodyMass)).map { sample -> [String: Any] in
+                record([
+                    "kilograms": sample.quantity.doubleValue(for: .gramUnit(with: .kilo)),
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["lean_body_mass": mapped]
+
+        case .sleep:
+            let sessions = buildSleepSessions(from: category(HKCategoryType(.sleepAnalysis)))
+            return sessions.isEmpty ? [:] : ["sleep": sessions]
+
+        case .exercise:
+            let workouts = (samplesByType[HKWorkoutType.workoutType()] ?? []).compactMap { $0 as? HKWorkout }
+            let mapped = workouts.map { workout -> [String: Any] in
+                record([
+                    "type": workout.workoutActivityType.name,
+                    "start_time": workout.startDate.iso8601String,
+                    "end_time": workout.endDate.iso8601String,
+                    "duration_seconds": Int(workout.duration)
+                ], from: workout)
+            }
+            return mapped.isEmpty ? [:] : ["exercise": mapped]
+
+        case .hydration:
+            let mapped = quantity(HKQuantityType(.dietaryWater)).map { sample -> [String: Any] in
+                record([
+                    "liters": sample.quantity.doubleValue(for: .liter()),
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["hydration": mapped]
+
+        case .nutrition:
+            let mapped = buildNutritionRecords(
+                calories: quantity(HKQuantityType(.dietaryEnergyConsumed)),
+                protein: quantity(HKQuantityType(.dietaryProtein)),
+                carbs: quantity(HKQuantityType(.dietaryCarbohydrates)),
+                fat: quantity(HKQuantityType(.dietaryFatTotal))
+            )
+            return mapped.isEmpty ? [:] : ["nutrition": mapped]
+
+        case .mindfulness:
+            let mapped = category(HKCategoryType(.mindfulSession)).map { sample -> [String: Any] in
+                let duration = sample.endDate.timeIntervalSince(sample.startDate)
+                return record([
+                    "start_time": sample.startDate.iso8601String,
+                    "end_time": sample.endDate.iso8601String,
+                    "duration_seconds": Int(duration)
+                ], from: sample)
+            }
+            return mapped.isEmpty ? [:] : ["mindfulness": mapped]
+
+        case .menstruation:
+            let flowSamples = category(HKCategoryType(.menstrualFlow)).compactMap { sample -> (HKCategorySample, String)? in
+                guard let value = HKCategoryValueMenstrualFlow(rawValue: sample.value) else { return nil }
+                switch value {
+                case .light: return (sample, "light")
+                case .medium: return (sample, "medium")
+                case .heavy: return (sample, "heavy")
+                case .unspecified: return (sample, "unknown")
+                default: return nil  // .none means no bleeding: skip
+                }
+            }
+            let mapped = flowSamples.map { sample, flow in
+                record([
+                    "flow": flow,
+                    "time": sample.startDate.iso8601String
+                ], from: sample)
+            }
+            guard !mapped.isEmpty else { return [:] }
+            let periods = MenstruationPeriodBuilder.periods(
+                from: flowSamples.map { FlowSample(start: $0.0.startDate, end: $0.0.endDate) }
+            )
+            return ["menstruation_flow": mapped, "menstruation_period": periods]
+        }
+    }
+
+    private func buildSleepSessions(from samples: [HKCategorySample]) -> [[String: Any]] {
+        let stageSamples = samples.compactMap { sample -> SleepStageSample? in
+            guard let value = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { return nil }
+            let stage: String
+            switch value {
+            case .inBed: stage = "in_bed"
+            case .asleepUnspecified: stage = "sleeping"
+            case .asleepCore: stage = "light"
+            case .asleepDeep: stage = "deep"
+            case .asleepREM: stage = "rem"
+            case .awake: stage = "awake"
+            @unknown default: stage = "unknown"
+            }
+            return SleepStageSample(
+                stage: stage,
+                start: sample.startDate,
+                end: sample.endDate,
+                uuid: sample.uuid.uuidString,
+                source: sample.sourceRevision.source.name
+            )
+        }
+        return SleepSessionBuilder.sessions(from: stageSamples)
+    }
+
+    private func buildNutritionRecords(
+        calories: [HKQuantitySample],
+        protein: [HKQuantitySample],
+        carbs: [HKQuantitySample],
+        fat: [HKQuantitySample]
+    ) -> [[String: Any]] {
+        var mapped: [[String: Any]] = calories.map { sample -> [String: Any] in
+            var fields: [String: Any] = [
+                "calories": sample.quantity.doubleValue(for: .kilocalorie()),
+                "start_time": sample.startDate.iso8601String,
+                "end_time": sample.endDate.iso8601String
+            ]
+            if let match = protein.first(where: { abs($0.startDate.timeIntervalSince(sample.startDate)) < 1 }) {
+                fields["protein_grams"] = match.quantity.doubleValue(for: .gram())
+            }
+            if let match = carbs.first(where: { abs($0.startDate.timeIntervalSince(sample.startDate)) < 1 }) {
+                fields["carbs_grams"] = match.quantity.doubleValue(for: .gram())
+            }
+            if let match = fat.first(where: { abs($0.startDate.timeIntervalSince(sample.startDate)) < 1 }) {
+                fields["fat_grams"] = match.quantity.doubleValue(for: .gram())
+            }
+            return record(fields, from: sample)
+        }
+        for proteinSample in protein
+        where !calories.contains(where: { abs($0.startDate.timeIntervalSince(proteinSample.startDate)) < 1 }) {
+            mapped.append(record([
+                "protein_grams": proteinSample.quantity.doubleValue(for: .gram()),
+                "start_time": proteinSample.startDate.iso8601String,
+                "end_time": proteinSample.endDate.iso8601String
+            ], from: proteinSample))
+        }
+        return mapped
     }
 
     /// Adds the stable HealthKit UUID and the writing app/device to a payload record,
